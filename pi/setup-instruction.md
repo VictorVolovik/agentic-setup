@@ -1,9 +1,9 @@
 # Replicate my Pi setup
 
-Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; Fireworks-first model access; `xhigh` thinking; dark theme; install telemetry off; Pi MCP, web access, Plannotator, and Caveman integrations.
+Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; `xhigh` thinking; dark theme; install telemetry off; Pi MCP, web access, Plannotator, and Caveman integrations.
 
 > [!CAUTION]
-> **Never copy secrets, credentials, caches, or sessions between machines.** Do not copy `~/.pi/agent/auth.json`, `sessions/`, `trust.json`, `models-store.json`, `mcp-*.json`, `~/.pi/agent/web-search-cache/` (legacy `~/.pi/web-search-cache/`), `~/.plannotator/`, browser profiles/cookies, shell history, or `.env*`. Re-authenticate on the new machine. A GitHub **secret gist is unlisted, not access-controlled**: anyone with its URL can read it.
+> **Never copy secrets, credentials, caches, or sessions between machines.** Do not copy `~/.pi/agent/auth.json`, `sessions/`, `trust.json`, `models-store.json`, `mcp-*.json`, `~/.pi/agent/web-search-cache/` (legacy `~/.pi/web-search-cache/`), `~/.plannotator/`, browser profiles/cookies, shell history, or `.env*`. Re-authenticate on the new machine.
 
 ## Manual TODOs
 
@@ -29,11 +29,11 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; Firewor
   npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.87.1
   ```
 
-- [ ] Create a Fireworks API key in the Fireworks dashboard. **Do not paste it into chat, an agent prompt, a shell command, or this gist.**
-- [ ] Authenticate Fireworks first: run `pi`, enter `/login`, choose **Fireworks**, and paste the key only into Pi's hidden login prompt. Pi stores it in mode-`0600` `~/.pi/agent/auth.json`.
-- [ ] Run `pi update --models`, then `pi --list-models fireworks`. In Pi, use `/model` to choose the strongest suitable Fireworks coding/tool-use model available at that time. Do not hardcode the old machine's default.
+- [ ] Get credentials for a model provider of your choice (API key or subscription sign-in). **Do not paste a key into chat, an agent prompt, a shell command, or this file.**
+- [ ] Authenticate first: run `pi`, enter `/login`, choose your provider, and sign in or paste the key only into Pi's hidden login prompt. Pi stores the credential in mode-`0600` `~/.pi/agent/auth.json`.
+- [ ] Run `pi update --models`, then `pi --list-models`. In Pi, use `/model` to choose the strongest suitable coding/tool-use model available at that time. Do not hardcode the old machine's default.
 - [ ] Clone this repo where it will stay (e.g. `~/Projects/agentic-setup`); shared skills link into the clone.
-- [ ] Give the agent this gist and ask it to complete **Agent TODOs**. Never provide the Fireworks key.
+- [ ] Give the agent this file and ask it to complete **Agent TODOs**. Never provide credentials.
 
 ### After the agent finishes
 
@@ -46,13 +46,12 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; Firewor
   Use bash to print only "$PI_PROVIDER/$PI_MODEL" and "$PI_REASONING_LEVEL", then reply "Pi setup works". Do not inspect credential files.
   ```
 
-- [ ] Confirm the response uses Fireworks, the selected model, and `xhigh` reasoning. Hold further config edits while doing this live test.
+- [ ] Confirm the response uses your provider, the selected model, and `xhigh` reasoning. Hold further config edits while doing this live test.
 - [ ] Confirm each skill in `skills/` completes as `/skill:<name>` in the editor.
-- [ ] Open <https://gist.github.com> while signed into GitHub, create a gist named `pi-setup-private-gist.md`, paste this file, and click **Create secret gist**. Recheck that no key/token/session/cache content appears. GitHub has no truly private gist; a secret gist is only unlisted.
 
 ## Agent TODOs
 
-- [ ] Treat this as a fresh-machine setup. Do not read, print, copy, or replace credential/session/cache files. Do not ask for the Fireworks key.
+- [ ] Treat this as a fresh-machine setup. Do not read, print, copy, or replace credential/session/cache files. Do not ask for credentials.
 - [ ] Confirm `node`, `npm`, and `pi` resolve through NVM before changing config.
 
 ### Pi packages
@@ -69,7 +68,7 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; Firewor
 
 ### Model-neutral global settings
 
-- [ ] Create `~/.pi/agent/settings.json` with this fresh-install config. Do not add `defaultProvider`, `defaultModel`, or `enabledModels`; Fireworks/model selection stays manual and current.
+- [ ] Create `~/.pi/agent/settings.json` with this fresh-install config. Do not add `defaultProvider`, `defaultModel`, or `enabledModels`; provider/model selection stays manual and current.
 
   ```json
   {
@@ -437,7 +436,7 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; Firewor
   python3 -m json.tool "$HOME/.pi/agent/settings.json" >/dev/null
 
   pi list
-  pi --list-models fireworks
+  pi --list-models
 
   test -f "$HOME/.pi/agent/AGENTS.md"
   test -f "$HOME/.pi/agent/extensions/plannotator-workflow.ts"
