@@ -47,7 +47,7 @@ Git: <branch>, HEAD <sha>
 - [ ] **<Step title>**: `<file>`
   - What: <what to change and why>
   - Interface: `<signature or type>` (when the step adds or changes one)
-  - Read: [<doc title>](<url>)
+  - Read: [<doc title>](url)
   - Done when: <what the user can run or see>
 
 ## Checks
@@ -115,8 +115,10 @@ for (let i = 0; i <= items.length; i++) {
 ```
 
 ```tsx
-{/* NIT(human): `cnt` → `count` */}
-<Badge value={cnt} />
+{
+  /* NIT(human): `cnt` → `count` */
+}
+<Badge value={cnt} />;
 ```
 
 ```ts
@@ -141,7 +143,7 @@ or `FIXME(human)` remains, suggest a commit message, and remind the user that th
 print nothing before committing:
 
 ```bash
-git grep -nE '(TODO|FIXME|NIT|QUESTION|NOTE)\(human\):'
+git grep --untracked -nE '(TODO|FIXME|NIT|QUESTION|NOTE)\(human\):'
 ```
 
 When the user says "stop todo": list the remaining review comments with that command.
