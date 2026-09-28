@@ -38,6 +38,7 @@ Before:
    cd ~/.claude && printf '%s\n' "$HOME" > source-home &&
      tar czf ~/claude-memory.tgz source-home projects/*/memory && rm source-home
    ```
+
 4. Launch `claude` on the target and give it:
 
    ```
@@ -416,9 +417,9 @@ skips the overwrite; a later `-f` overrides `-i` in both BSD and GNU `mv`.
 branch and grows with each commit. `uncommitted` = HEAD → working tree only.
 
 **Config file alone does not stick.** First `plannotator review` in a fresh browser
-opens a setup dialog preset to *Git status* + *All changes* and writes `since-base`
+opens a setup dialog preset to _Git status_ + _All changes_ and writes `since-base`
 back into `config.json`. In that dialog pick **Uncommitted** (view snaps to Tree).
-Never pick the *Git status* view later — it only renders `since-base` and resets the
+Never pick the _Git status_ view later — it only renders `since-base` and resets the
 default.
 
 ## 6. Memory
