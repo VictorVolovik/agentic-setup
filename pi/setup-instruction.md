@@ -163,112 +163,6 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; `xhigh`
 
   The leading `/` anchors `plans/` to each repo root; nested `plans/` directories stay tracked. The bare `echo` ends a last line that lacks a newline; git skips blank lines.
 
-### Plannotator workflow bridge
-
-- [ ] Create `~/.pi/agent/extensions/plannotator-workflow.ts` exactly as follows:
-
-  ```typescript
-  import { randomUUID } from "node:crypto";
-  import { StringEnum } from "@earendil-works/pi-ai";
-  import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-  import { Type } from "typebox";
-
-  const PLANNOTATOR_REQUEST_CHANNEL = "plannotator:request";
-
-  const Params = Type.Object({
-    action: StringEnum(["plan", "review"] as const, {
-      description:
-        "Enter Plannotator plan mode or open code review for the current worktree",
-    }),
-  });
-
-  type WorkflowResponse =
-    | { status: "handled"; result: unknown }
-    | { status: "unavailable" | "error"; error?: string };
-
-  export default function (pi: ExtensionAPI) {
-    pi.registerTool({
-      name: "plannotator_workflow",
-      label: "Plannotator Workflow",
-      description:
-        "Use Plannotator's official Pi integration. Action 'plan' enters restricted planning mode. Action 'review' opens code review for the current worktree and waits for the user's decision.",
-      parameters: Params,
-
-      async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-        const requiredCommand =
-          params.action === "plan"
-            ? "plannotator-plan-mode"
-            : "plannotator-review";
-        const commandNames = new Set(
-          pi.getCommands().map((command) => command.name),
-        );
-        if (!commandNames.has(requiredCommand)) {
-          throw new Error(
-            "Plannotator Pi integration is not loaded. Run /reload and retry.",
-          );
-        }
-
-        const response = await new Promise<WorkflowResponse>((resolve) => {
-          let settled = false;
-          const finish = (value: WorkflowResponse) => {
-            if (settled) return;
-            settled = true;
-            signal?.removeEventListener("abort", onAbort);
-            resolve(value);
-          };
-          const onAbort = () =>
-            finish({ status: "error", error: "Plannotator workflow cancelled." });
-          signal?.addEventListener("abort", onAbort, { once: true });
-
-          pi.events.emit(PLANNOTATOR_REQUEST_CHANNEL, {
-            requestId: randomUUID(),
-            action: params.action === "plan" ? "plan-mode" : "code-review",
-            payload:
-              params.action === "plan" ? { mode: "enter" } : { cwd: ctx.cwd },
-            respond: finish,
-          });
-        });
-
-        if (response.status !== "handled") {
-          throw new Error(response.error ?? "Plannotator workflow is unavailable.");
-        }
-
-        if (params.action === "plan") {
-          const phase =
-            (response.result as { phase?: string })?.phase ?? "unknown";
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Plannotator phase: ${phase}. Continue using the active planning workflow.`,
-              },
-            ],
-            details: { action: params.action, phase },
-          };
-        }
-
-        const review = response.result as {
-          approved?: boolean;
-          feedback?: string;
-          annotations?: unknown[];
-        };
-        const text = review.approved
-          ? review.feedback
-            ? `Code review approved with notes:\n${review.feedback}`
-            : "Code review approved."
-          : review.feedback
-            ? `Code review requested changes:\n${review.feedback}`
-            : "Code review closed without approval or feedback.";
-
-        return {
-          content: [{ type: "text", text }],
-          details: { action: params.action, ...review },
-        };
-      },
-    });
-  }
-  ```
-
 ### Caveman skills
 
 - [ ] Review the repository, pin the clone to the tested release tag `v2.7.0`, and link only the basic skills. Upstream `skills/` also holds Caveman Cloud and workflow skills (`caveman-setup`, `surgical-patch`, …) that this setup leaves out:
@@ -285,105 +179,6 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; `xhigh`
 
   If `~/.caveman` already exists, inspect it, then run `git -C ~/.caveman fetch --tags origin` and `git -C ~/.caveman checkout v2.7.0` instead of cloning. The detached HEAD is intended: `../claude/claude-code-setup-transfer.md` §8 pins the same tag. Pi auto-discovers `~/.agents/skills`; the explicit `caveman` setting mirrors this setup.
 
-### Caveman `/caveman` command and session auto-invoke
-
-- [ ] Create `~/.pi/agent/extensions/caveman-command.ts` exactly as follows. It registers a `/caveman` slash command and auto-activates caveman on every session start. The command accepts an optional level argument (`lite`, `full`, `ultra`, `wenyan-lite`, `wenyan-full`, `wenyan-ultra`, `off`); with no argument it resets to the default (`full`). Auto-on defaults are hardcoded (`AUTO_ON_START = true`, `DEFAULT_LEVEL = "full"`). The extension reads `~/.agents/skills/caveman/SKILL.md` once at load and appends the full skill plus the active level to the system prompt via `before_agent_start` (rebuilt each turn, survives compaction), so no `AGENTS.md` rule is needed to load the skill. `/caveman off`, or typing `stop caveman` or `normal mode` as a whole message, disables it for the current session only; the next session start re-applies the default. The existing `/skill:caveman` skill command remains available; this extension adds the cleaner `/caveman` slash command and the auto-on behavior.
-
-  ```typescript
-  import { readFileSync } from "node:fs";
-  import { homedir } from "node:os";
-  import { join } from "node:path";
-  import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-  import type { AutocompleteItem } from "@earendil-works/pi-tui";
-
-  const AUTO_ON_START = true;
-  const LEVELS = [
-    "lite",
-    "full",
-    "ultra",
-    "wenyan-lite",
-    "wenyan-full",
-    "wenyan-ultra",
-    "off",
-  ] as const;
-
-  type Level = (typeof LEVELS)[number];
-  type ActiveLevel = Exclude<Level, "off">;
-
-  const DEFAULT_LEVEL: ActiveLevel = "full";
-  const SKILL_RULES = readFileSync(
-    join(homedir(), ".agents", "skills", "caveman", "SKILL.md"),
-    "utf8",
-  );
-
-  let level: Level = AUTO_ON_START ? DEFAULT_LEVEL : "off";
-
-  function isLevel(value: string): value is Level {
-    return (LEVELS as readonly string[]).includes(value);
-  }
-
-  function activationPrompt(activeLevel: ActiveLevel): string {
-    return `<skill name="caveman">
-  ${SKILL_RULES}
-  </skill>
-
-  [caveman active — level: ${activeLevel}] Apply caveman rules at "${activeLevel}" intensity. Active every response until /caveman off, "stop caveman", or "normal mode".`;
-  }
-
-  export default function (pi: ExtensionAPI) {
-    pi.on("session_start", () => {
-      level = AUTO_ON_START ? DEFAULT_LEVEL : "off";
-    });
-
-    pi.on("input", async (event, ctx) => {
-      const input = event.text.trim().toLowerCase();
-      if (input !== "stop caveman" && input !== "normal mode") return;
-
-      level = "off";
-      ctx.ui.notify("caveman: off (normal mode)", "info");
-    });
-
-    pi.on("before_agent_start", async (event) => {
-      if (level === "off") return;
-
-      return {
-        systemPrompt: `${event.systemPrompt}\n\n${activationPrompt(level)}`,
-      };
-    });
-
-    pi.registerCommand("caveman", {
-      description:
-        "Set compressed-output mode. Usage: /caveman [lite|full|ultra|wenyan-lite|wenyan-full|wenyan-ultra|off]",
-      getArgumentCompletions(prefix: string): AutocompleteItem[] | null {
-        const items = LEVELS.map((value) => ({ value, label: value }));
-        const filtered = items.filter((item) => item.value.startsWith(prefix));
-        return filtered.length > 0 ? filtered : null;
-      },
-      handler: async (args, ctx) => {
-        const arg = args.trim().toLowerCase();
-        if (!arg) {
-          level = DEFAULT_LEVEL;
-          ctx.ui.notify(`caveman: ${level}`, "info");
-          return;
-        }
-        if (!isLevel(arg)) {
-          ctx.ui.notify(
-            `Unknown level: ${arg}. Valid: ${LEVELS.join(", ")}`,
-            "warning",
-          );
-          return;
-        }
-
-        level = arg;
-        ctx.ui.notify(
-          arg === "off" ? "caveman: off (normal mode)" : `caveman: ${arg}`,
-          "info",
-        );
-      },
-    });
-  }
-  ```
-
 ### Shared skills
 
 - [ ] Link each folder in this repo's `skills/` into `~/.agents/skills`. These are the same folders that `../claude/claude-code-setup-transfer.md` §7 links into `~/.claude/skills`. Pi follows symlinked skill directories. The links point into this clone, so set `repo` to where it stays:
@@ -397,6 +192,25 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; `xhigh`
   ```
 
   Pi runs a skill as `/skill:<name>`, e.g. `/skill:tutor Rust programming`. Reruns are safe. A skill deleted from the repo leaves a dangling link, which pi skips; remove it by hand.
+
+### Pi extensions
+
+- [ ] Link each file in this repo's `pi/extensions/` into `~/.pi/agent/extensions`. Pi loads symlinked extension files, so edits in the repo apply after `/reload`. The links point into this clone, so set `repo` to where it stays:
+
+  ```bash
+  repo=~/Projects/agentic-setup
+  mkdir -p "$HOME/.pi/agent/extensions"
+  for f in "$repo"/pi/extensions/*.ts; do
+    ln -sfn "$f" "$HOME/.pi/agent/extensions/$(basename "$f")"
+  done
+  ```
+
+  The extensions:
+
+  - `plannotator-workflow.ts` registers the `plannotator_workflow` tool that `AGENTS.md` uses. Action `plan` enters Plannotator's restricted planning mode; action `review` opens code review for the current worktree and waits for the user's decision. It talks to the Plannotator Pi extension over its `plannotator:request` event channel.
+  - `caveman-command.ts` registers a `/caveman` slash command and auto-activates caveman on every session start. The command accepts an optional level argument (`lite`, `full`, `ultra`, `wenyan-lite`, `wenyan-full`, `wenyan-ultra`, `off`); with no argument it resets to the default (`full`). Auto-on defaults are hardcoded (`AUTO_ON_START = true`, `DEFAULT_LEVEL = "full"`). The extension reads `~/.agents/skills/caveman/SKILL.md` once at load (linked by "Caveman skills" above) and appends the full skill plus the active level to the system prompt via `before_agent_start` (rebuilt each turn, survives compaction), so no `AGENTS.md` rule is needed to load the skill. `/caveman off`, or typing `stop caveman` or `normal mode` as a whole message, disables it for the current session only; the next session start re-applies the default. The existing `/skill:caveman` skill command remains available; this extension adds the cleaner `/caveman` slash command and the auto-on behavior.
+
+  Reruns are safe: `ln -sfn` also replaces a regular file of the same name, so a machine set up before this change gets its two copies replaced by links. An extension deleted from the repo leaves a dangling link; remove it by hand.
 
 ### Plannotator CLI and skills
 
@@ -439,7 +253,6 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; `xhigh`
   pi --list-models
 
   test -f "$HOME/.pi/agent/AGENTS.md"
-  test -f "$HOME/.pi/agent/extensions/plannotator-workflow.ts"
   test -d "$HOME/.pi/agent/npm/node_modules/pi-mcp-adapter"
   test -d "$HOME/.pi/agent/npm/node_modules/pi-web-access"
   test -d "$HOME/.pi/agent/npm/node_modules/@plannotator/pi-extension"
@@ -449,6 +262,7 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; `xhigh`
   grep -qxF '/plans/' "$(git config --global --path core.excludesFile || echo "${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore")"
   find -L "$HOME/.agents/skills" -mindepth 2 -maxdepth 2 -name SKILL.md -print | sort
   for d in "$HOME/Projects/agentic-setup/skills"/*/; do test -f "$HOME/.agents/skills/$(basename "$d")/SKILL.md" || echo "missing $(basename "$d")"; done
+  for f in "$HOME/Projects/agentic-setup/pi/extensions"/*.ts; do test "$(readlink "$HOME/.pi/agent/extensions/$(basename "$f")")" = "$f" || echo "unlinked $(basename "$f")"; done
   ```
 
 - [ ] Run `pi --no-session`, confirm the startup header discovers global `AGENTS.md`, expected skills, package extensions, and `plannotator-workflow`, with no `[Skill conflicts]` block; then quit without inspecting `auth.json`.
