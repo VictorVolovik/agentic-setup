@@ -129,6 +129,7 @@ Tested snapshot: NVM-managed Node `24.15.0`, npm `11.12.1`, Pi `0.87.1`; `xhigh`
   ## Plannotator
 
   - Use Plannotator plan mode for every plan awaiting approval, and Plannotator code review at every phase boundary and after plan execution.
+  - Write plan steps as Markdown checkboxes (`- [ ] …`); Plannotator tracks execution only from checkbox items.
   - Use the installed Pi integration/event workflow; do not manually run duplicate `plannotator` CLI sessions.
   - One `review` call per review. If it has not returned, say so and wait; never call it again to retry.
   - Plan feedback requires revision and resubmission until the plan is approved or dismissed; `dismissed` is not approval — do not implement, ask. Code-review feedback gets a verdict per finding; the user picks which to fix.
